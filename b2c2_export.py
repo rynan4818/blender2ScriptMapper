@@ -24,51 +24,45 @@ import time
 
 from datetime import datetime
 
-# ExportHelper is a helper class, defines filename and
-# invoke() function which calls the file selector.
+# ExportHelperはヘルパークラスで、ファイル名とファイルセレクタを呼び出すinvoke()関数を定義します。
 from bpy_extras.io_utils import ExportHelper
 from bpy.props import StringProperty, BoolProperty
 from bpy.types import Operator
 
 '''
-Config Stuff
+設定
 '''
 
-# The script will search for cameras with this prefix in their name. You don't
-# need to change this to use the script normally.
+# スクリプトは、名前にこの接頭辞を含むカメラを検索します。
+# スクリプトを通常使用する場合は、これを変更する必要はありません。
 CONFIG_CAMERA_PREFIX = 'b2c2_'
 
-# If you are working on a project that requires post-processing with chroma key
-# effects (green screens), -AND- you are rendering something out of Blender to
-# use in your Beat Saber video, enable this option to automatically set the
-# Blender camera sensor values so that the Blender render will match the Beat
-# Saber capture exactly.
+# クロマキーエフェクト（グリーンスクリーン）による後処理が必要なプロジェクトに取り組んでいて、
+# かつBeat Saberのビデオで使用するためにBlenderから何かをレンダリングしている場合、
+# このオプションを有効にすると、Blenderのカメラセンサーの値が自動的に設定され、
+# BlenderのレンダリングがBeat Saberのキャプチャと正確に一致するようになります。
 
-# If you aren't doing any post-process special effects, or you aren't sure what
-# this is, then leave the option disabled.
+# ポストプロセスで特殊効果を行わない場合、またはこれが何なのかよくわからない場合は、
+# このオプションを無効のままにしておいてください。
 
-# Of course if you do know what this is and why it's needed, you probably
-# have the necessary knowledge to change the Blender camera options on your own
-# without B2C2.
+# もちろん、これが何なのか、なぜ必要なのかを知っているのであれば、
+# B2C2を使わずに自分でBlenderのカメラオプションを変更するのに必要な知識を持っているでしょう。
 CONFIG_CAMERA_SENSOR_FIX_FOV_FOR_BLENDER_RENDERS = False
 
 CONFIG_CAMERA_SENSOR_FIT    = 'VERTICAL'
 CONFIG_CAMERA_SENSOR_HEIGHT = 24.0
 CONFIG_CAMERA_SENSOR_WIDTH  = 42.666666
 
-# Set to true if you want the Blender system console output to be logged to a
-# file on the disk. The log file will be written to the same directory as your
-# blend file. This is only useful for debugging.
+# Blender のシステムコンソール出力をディスク上のファイルにログ出力したい場合に true を設定します。
+# ログファイルはblendファイルと同じフォルダに書き込まれます。これはデバッグにのみ有効です。
 CONFIG_ENABLE_LOGGING_TO_DISK = True
 
-# The script uses a temporary object to store matrix transforms during
-# coordinate system conversion. This object is created when the script starts
-# running and is removed when the script is done (if it doesn't crash, of
-# course).
+# このスクリプトは、座標系変換時に行列変換を保存するための一時オブジェクトを使用します。
+# このオブジェクトはスクリプトの実行開始時に作成され、スクリプトが終了すると（もちろんクラッシュしなければ）削除されます。
 CONFIG_EXPORT_OBJECT_PREFIX = 'b2c2_export_object_'
 
 '''
-Logging Stuff
+ログ関係
 '''
 
 logger = logging.getLogger(__name__)
@@ -76,87 +70,73 @@ logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
 
 '''
-> Translating from Blender -> Unity / Beat Saber
+> BlenderからUnity/Beat Saberへの翻訳
 
-TL,DR:
-    # Subtract 90 degrees on the Blender X axis, then
+要約:
+    # BlenderのX軸で90度引いて、次に
     (px, pz, py) = mw_unity.to_translation()
     (rx, rz, ry) = mw_unity.to_euler('YXZ')
     (rx, rz, ry) = (-rx, -rz, -ry)
+    #  ...そして、Unity互換の座標と回転が得られます。
 
-    # ... and then you have Unity compatible coords + rotations.
+仕組み:
+- BlenderはZ-up、右手座標系を使用します。
+- Blenderの正回転は反時計回り
 
-Logic:
-- Blender uses a Z-up, right-hand coordinate system
-- Blender positive rotations are counter-clockwise
+- UnityはY-up、左手座標系を使用します。
+- Unityの正回転は時計回り
 
-- Unity uses a Y-up, left-hand coordinate system
-- Unity positive rotations are clockwise
+このスクリプトを読んでいる人で、Blender座標をUnity座標に変換した方法を知りたい人のために:
+    重要なのは、Blenderからエクスポートするときに正しいオイラー回転順序を設定することです。
 
-For anyone who is reading this script and wants to know how I converted Blender
-coordinates to Unity coordinates: the key is setting the right Euler rotation
-order when exporting from Blender.
-
-The Unity engine expects a Euler order of ZXY. See:
+UnityエンジンはZXYのオイラー次数を想定しています。参照してください:
 
     https://docs.unity3d.com/ScriptReference/Transform-eulerAngles.html
 
-In Camera2 terms, Unity sets the camera rotation in this order:
-* rot Z = camera roll angle. Looking "down the barrel", where the camera lens
-    is facing away from you, a positive Z rotation (roll) of 45 degrees would
-    cause the camera to roll to the left (counter-clockwise).
+Camera2 の用語では、Unity はカメラの回転を次の順序で設定します：
+* 回転 Z = カメラのロール角度。「樽の下」を見て、カメラのレンズがあなたに背を向けている場合、
+  45度の正のZ回転（ロール）は、カメラを左（反時計回り）にロールさせます。
 
-* rot X = camera pitch angle. If you were to look at a camera such that the top
-    of the camera was "up" and the lens of the camera was facing left, a
-    positive X rotation (pitch) of 45 degrees would cause the camera to point
-    downward (counter-clockwise).
+* 回転 X = カメラのピッチ角。カメラの上部が "上 "で、カメラのレンズが左を向いているようなカメラを見た場合、
+  正のX回転（ピッチ）45度はカメラを下向き（反時計回り）にします。
 
-* rot Y = camera yaw angle. Imagine looking at the Beat Saber platform from the
-    top down, with the highway at the top / North / forward position. A
-    positive Y rotation (yaw) of 45 degrees would cause the camera to point
-    to the right (clockwise).
+* rot Y = カメラのヨー角。 Beat Saber プラットフォームを上から下に見て、
+  高速道路が上 / 北 / 前方の位置にあることを想像してください。
+  正の Y 回転 (ヨー) が 45 度の場合、カメラは右 (時計回り) を指します。
 
-To export from Blender to Unity with minimal drama, you need to get the three
-Euler angles from Blender in the right order. But don't think in terms of
-X/Y/Z. Instead, think in terms of roll / pitch / yaw.
+BlenderからUnityに最小限のドラマでエクスポートするには、Blenderから3つのオイラー角を正しい順序で
+取得する必要があります。しかし、X/Y/Zで考えてはいけません。代わりに、roll / pitch / yawで考えてください。
 
-Before doing that, there's something else that has to be considered.
+その前に考えなければならないことがあります。
 
-> Camera Orientation in Blender vs Unity
+> BlenderとUnityにおけるカメラの向き
 
-Blender cameras and Unity cameras interpret their pitch angles differently.
+BlenderのカメラとUnityのカメラはピッチ角の解釈が異なります。
 
-In Blender, a pitch angle of 0 degrees causes a camera to point straight down.
+Blenderではピッチアングルが0度だとカメラは真下を向きます。
 
-In Unity, a pitch angle of 0 degrees causes a camera to point straight forward,
-toward the horizon. (Straight forward in Blender is +90 degrees of pitch.)
+Unityでは、ピッチアングルが0度だとカメラはまっすぐ前方、地平線の方を向きます。(Blenderでの真正面はピッチ+90度です)。
 
-Thus, to translate from Blender -> Unity and end up with the same pitch
-orientation, the B2C2 export script must subtract 90 degrees.
+したがって、BlenderからUnityにトランスレートして同じピッチの向きにするには、B2C2エクスポートスクリプトで90度減算する必要があります。
 
-> Putting it All Together
+> まとめ
 
-Looking at this code:
+このコードを見ると:
     (rx, rz, ry) = mw_unity.to_euler('YXZ')
 
-The Euler order is "YXZ" because the Unity engine expects ZXY -AND- because
-the Y and Z axes are swapped between Blender and Unity. Thus to_euler() must
-be called as though the Blender Z axis is actually Y, and vice versa.
+UnityエンジンはZXYを想定しているため、オイラーオーダーは "YXZ"となります。
+従って、to_euler() はBlenderのZ軸が実際にはYであるかのように呼び出されなければなりません。
 
-The same logic applies to the output tuple. Z and Y are swapped.
+同じロジックが出力タプルにも当てはまります。ZとYが入れ替わります。
 
-Finally, the raw rotation angles in the tuple must be multiplied by -1 to
-account for counter-clockwise vs clockwise sign difference between Blender and
-Unity.
+最後に、BlenderとUnityの反時計回りと時計回りの符号の違いを考慮するために、タプル内の生の回転角度に-1を掛けなければなりません。
 
-That's how the logic worked in my brain, and after -a lot- of testing by
-comparing captured video, the script output seems to be dead on in Unity / Beat
-Saber. If someone else has a better way to explain then leave an issue in the
-github.
+私の脳内ではこのようにロジックが動いていて、キャプチャしたビデオを比較しながら何度もテストした結果、
+スクリプトの出力はUnity / Beat Saberで正確に動作しているようです。もし他にもっと良い説明方法があれば、githubにissueを残してください。
 '''
 
 '''
-Classes
+クラス
 '''
 
 class B2C2Export(Operator, ExportHelper):
@@ -164,48 +144,43 @@ class B2C2Export(Operator, ExportHelper):
     bl_idname = "b2c2_export.export"
     bl_label = "Export"
 
-    # ExportHelper mixin class uses this
+    # ExportHelper mixinクラスは、このメソッドを使用します。
     filename_ext = ".json"
 
     filter_glob: StringProperty(
         default="*.json",
         options={'HIDDEN'},
-        maxlen=255,  # Max internal buffer length, longer would be clamped.
+        maxlen=255,  # 内部バッファーの最大長、それ以上はクランプされます。
     )
 
-    # List of operator properties, the attributes will be assigned
-    # to the class instance from the operator settings before calling.
+    # 演算子のプロパティのリスト。属性は、呼び出す前に演算子の設定からクラスのインスタンスに割り当てられます。
     setting_fixFovForBlenderRender: BoolProperty(
         name="Fix camera FOV for Blender renders",
-        description="For projects that use post-process chroma key "        \
-            "compositing (green screen), check this option to fix your "    \
-            "camera FOV so that the FOV in your Blender renders will match "\
-            "the FOV in Beat Saber",
+        description="ポストプロセスでクロマキー合成（グリーン・スクリーン）を使用するプロジェクトでは、"   \
+            "このオプションをチェックしてカメラのFOVを固定し、BlenderレンダリングのFOVがBeat SaberのFOVと一致するようにします。",
         default=False,
     )
 
     setting_loop: BoolProperty(
         name="Loop Script",
-        description="When checked, the movement script will loop if the "   \
-            "song is longer than the script. Otherwise, the movement "      \
-            "script will only play once and stop on the last keyframe",
+        description="チェックすると、曲がスクリプトより長い場合、移動スクリプトはループします。"  \
+            "そうでない場合、移動スクリプトは一度だけ再生され、最後のキーフレームで停止します。",
         default=True,
     )
 
     setting_syncToSong: BoolProperty(
         name="Sync to Song",
-        description="When checked, the movement script pauses when you "    \
-            "pause the song",
+        description="チェックを入れると、曲の一時停止時に移動スクリプトが一時停止します。",
         default=True,
     )
 
     def execute(self, context):
 
-        # Add file log handler
+        # ファイルログハンドラの追加
         if (True == CONFIG_ENABLE_LOGGING_TO_DISK):
             logger_start_disk()
 
-        # Export the movement script
+        # 移動スクリプトのエクスポート
         export_main(
                 context,
                 self.filepath,
@@ -213,7 +188,7 @@ class B2C2Export(Operator, ExportHelper):
                 self.setting_loop,
                 self.setting_syncToSong)
 
-        # Clean up log handlers
+        # ログハンドラのクリーンアップ
         handlers = logger.handlers[:]
         for handler in handlers:
             logger.removeHandler(handler)
@@ -223,15 +198,15 @@ class B2C2Export(Operator, ExportHelper):
 
 
 '''
-Menu Stuff
+メニュー 一覧
 '''
 
-# Only needed if you want to add into a dynamic menu
+# ダイナミック・メニューに追加する場合のみ必要です。
 def menu_func_export(self, context):
     self.layout.operator(B2C2Export.bl_idname, text="Beat Saber Camera2 Movement Script (.json)")
 
 
-# Register and add to the "file selector" menu (required to use F3 search "Text Export Operator" for quick access)
+# 登録し、「ファイルセレクタ」メニューに追加します（F3検索「テキストエクスポートオペレータ」でクイックアクセスするために必要です）。
 def register():
     bpy.utils.register_class(B2C2Export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
@@ -243,7 +218,7 @@ def unregister():
 
 
 '''
-Export Functions
+エクスポート機能
 '''
 
 def export_main(
@@ -253,15 +228,14 @@ def export_main(
         setting_loop,
         setting_syncToSong):
 
-    # Track script running time
+    # スクリプトの実行時間の追跡
     now_head = datetime.now()
     logger.debug('Export started at ' + str(now_head))
 
     '''
-    Store a list of selected objects (if any)
+    選択されたオブジェクトのリストを保存します。
 
-    I find it annoying when a script runs and deselects everything, so B2C2
-    will put things back the way it found them (if it doesn't crash).
+    スクリプトが実行され、すべての選択が解除されると迷惑なので、B2C2 は（クラッシュしなければ）元の状態に戻してくれます。
     '''
 
     pre_selected_active_object = bpy.context.view_layer.objects.active.name
@@ -273,11 +247,10 @@ def export_main(
     # --------------------------------------------------------------------------
 
     '''
-    Find Cameras
+    カメラの検索
 
-    Iterate through every object that is presently loaded from the blend file.
-    Figure out which objects are cameras, and then pick out the cameras with
-    the special prefix in their name.
+    ブレンドファイルからロードされている全てのオブジェクトを繰り返します。
+    どのオブジェクトがカメラであるかを把握し、名前に特別な接頭辞を持つカメラを選び出します。
     '''
 
     cameras = []
@@ -295,11 +268,10 @@ def export_main(
     # --------------------------------------------------------------------------
 
     '''
-    Create Temporary Export Object
+    一時エクスポートオブジェクトの作成
 
-    hashlib is involved so B2C2 can generate a random name for the temporary
-    object. If the export object name conflicts with something that is already
-    in your Blend file, go buy a lottery ticket.
+    B2C2が一時オブジェクトのランダムな名前を生成できるように、hashlibが関係しています。
+    もし、エクスポートされたオブジェクトの名前が、すでにBlendファイル内にある名前と衝突する場合は、宝くじを買ってください。
     '''
     m = hashlib.sha1()
     m.update(str(random.getrandbits(128)).encode('utf-8'))
@@ -312,16 +284,15 @@ def export_main(
     # --------------------------------------------------------------------------
 
     '''
-    Collect Location, Rotation, & FOV
+    位置、回転、FOVの収集
 
-    For every frame in the scene, collect data from all the cameras that were
-    found in the block above. All of these frames put together create the
-    camera path, hence the name of the dictionary.
+    シーンの各フレームについて、上記のブロックで見つかったすべてのカメラからデータを収集します。
+    これらのフレームをすべて組み合わせると、カメラ・パスが作成されます。
 
-    This "data" is:
-    - The camera position (in Blender X,Y,Z)
-    - The camera rotation (in Blender X,Y,Z)
-    - The camera field of view (in degrees)
+    この "data" とは:
+    - カメラ位置 (in Blender X,Y,Z)
+    - カメラ角度 (in Blender X,Y,Z)
+    - カメラFOV (in degrees)
     '''
 
     scene = context.scene
@@ -329,30 +300,30 @@ def export_main(
 
     layer = bpy.context.view_layer
 
-    # Loop through each (b2c2) camera in the scene.
+    # シーン内の各（b2c2）カメラをループします。
     for camera in cameras:
 
         logger.debug('Retrieving data for camera    : ' + str(camera.name))
 
-        # Fix the camera sensor values, so FOV in Blender renders will match
-        # Beat Saber FOV (only needed for post-processing with chroma key
-        # effects)
+        # カメラセンサーの値を修正し、BlenderレンダリングのFOVがBeat SaberのFOVと一致するようにしました。
+        # (クロマキーエフェクトの後処理にのみ必要)
         if CONFIG_CAMERA_SENSOR_FIX_FOV_FOR_BLENDER_RENDERS or setting_fixFovForBlenderRender:
             camera.data.sensor_fit      = CONFIG_CAMERA_SENSOR_FIT
             camera.data.sensor_width    = CONFIG_CAMERA_SENSOR_WIDTH
             camera.data.sensor_height   = CONFIG_CAMERA_SENSOR_HEIGHT
 
-        # For each frame in the scene...
+        # シーン内の各フレームについて...
         for frame in range(scene.frame_start, scene.frame_end + 1):
 
-            # Set the scene to this frame.
+            # シーンをこのフレームに設定します。
             scene.frame_set(frame)
             layer.update()
 
-            # Get the world position matrix of the current camera.
+            # 現在のカメラのワールド位置行列を取得します。
             mw_blender = camera.matrix_world
 
-            # See comments under "Camera Orientation in Blender vs Unity".
+            # 以下のコメントを参照してください。
+            # (BlenderとUnityにおけるカメラの向き)
             export_obj.matrix_world = mw_blender
             scene.frame_set(frame)
             layer.update()
@@ -364,70 +335,66 @@ def export_main(
             mw_unity = copy.deepcopy(export_obj.matrix_world)
 
             '''
-            Field-of-View (FOV) Notes
+            視野（FOV）に関する注意事項
 
-            The FOV value written in the Camera2 movement script is interpreted
-            as the vertical FOV in the game. B2C2 has no control over this, it
-            is just how Beat Saber / the Unity game engine works.
+            Camera2移動スクリプトに記述されたFOV値は、ゲーム内の垂直FOVとして解釈されます。
+            B2C2はこれを制御できません。これはBeat Saber / Unityゲームエンジンがどのように動作するかということです。
 
-            In the context of Blender: how the FOV is applied depends on the
-            aspect ratio of the final rendered image.
+            Blenderの場合：FOVがどのように適用されるかは、最終的なレンダリング画像のアスペクト比に依存します。
 
-                * For landscape images the FOV applies to the horizontal (width)
-                * For portrait images the FOV applies to the vertical (height)
+                * 横長の画像の場合、FOVは横（幅）に適用されます。
+                * ポートレート画像の場合、FOVは垂直（高さ）に適用されます。
 
-            How Unity handles FOV:
+            UnityのFOVの扱い方:
             https://docs.unity3d.com/ScriptReference/Camera-fieldOfView.html
 
-            How Blender handles FOV:
+            BlenderのFOVの扱い方:
             https://blender.stackexchange.com/questions/23431/how-to-set-camera-horizontal-and-vertical-fov
             https://docs.blender.org/api/current/bpy.types.Camera.html
 
-            Fortunately we don't have to worry about any of this mess, since
-            Blender automatically provides the vertical FOV value with the
-            camera data object.
+            幸いなことに、Blenderは自動的にカメラデータオブジェクトで垂直方向のFOV値を提供するので、このような混乱を心配する必要はありません。
             '''
 
             # Grab (vertical) field-of-view angle
             fov = math.degrees(camera.data.angle_y)
 
             '''
-            Final Camera Output
+            最終カメラ出力
             '''
 
-            # Decompose Unity camera's position. See notes about to_euler()
-            # under "Camera Orientation in Blender vs Unity".
+            # Unityカメラの位置を分解します。to_euler() については、
+            # "BlenderとUnityにおけるカメラの向き" の注記を参照してください。
             (px, pz, py) = mw_unity.to_translation()
             (rx, rz, ry) = mw_unity.to_euler('YXZ')
 
-            # Pack Unity camera data in a temporary dictionary.
+            # Unityカメラのデータを一時的な辞書にまとめます。
             dict_unity = {}
             dict_unity['frame'] = frame
             dict_unity['pos'] = (px, py, pz)
             dict_unity['rot'] = (-rx, -ry, -rz)
             dict_unity['fov'] = fov
 
-            # Append data to the camera's list inside the path dictionary.
+            # パス辞書内のカメラのリストにデータを追加します。
             if camera.name not in paths:
                 paths[camera.name] = []
 
             paths[camera.name].append(dict_unity)
 
-    # Clean up the temporary export object.
+    # 一時エクスポート・オブジェクトをクリーンアップします。
     export_obj.select_set(True)
     bpy.ops.object.delete()
 
     # --------------------------------------------------------------------------
 
     '''
-    Re-select all previously selected objects
+    以前に選択したすべてのオブジェクトを再選択
     '''
 
-    # Deselect all selected objects
+    # すべての選択オブジェクトの選択を解除
     for obj in bpy.context.selected_objects:
         obj.select_set(False)
 
-    # Restore original selection
+    # 元の選択に戻す
     for obj_name in pre_selected_objects:
         bpy.data.objects[obj_name].select_set(True)
 
@@ -436,41 +403,39 @@ def export_main(
     # --------------------------------------------------------------------------
 
     '''
-    Convert to exportable format
+    エクスポート可能な形式に変換
 
-    The Camera2 movement scripts are stored in JSON format. The individual
-    camera keyframes are stored within a single list titled "frames". Each
-    frame is a dictionary that contains "position", "FOV", "rotation", and a
-    few optional fields.
+    Camera2の動作スクリプトはJSON形式で保存されます。個々のカメラのキーフレームは、
+    "frames "というタイトルの1つのリストに格納されます。
+    各フレームは、"位置"、"FOV"、"回転"、およびいくつかのオプションフィールドを含む辞書です。
 
-    The dictionary of paths created above needs to be converted into a new
-    list / dict based structure so that exporting to the JSON file will be
-    easier in the next step.
+    上で作成したパスの辞書は、次のステップでJSONファイルへのエクスポートが簡単になるように、
+    新しいリスト/辞書ベースの構造に変換する必要があります。
     '''
 
     movement = {}
 
-    # Calculate frame duration (in seconds)
+    # フレーム時間（秒）を計算
     duration = 1 / scene.render.fps
 
     for camera_name in paths:
 
-        # Create the camera's frame list inside the path dictionary
+        # パス辞書内にカメラのフレームリストを作成します。
         if camera_name not in movement:
             movement[camera_name] = {}
 
-        # Store optional global settings
+        # オプションのグローバル設定を保存
         movement[camera_name]['syncToSong'] = setting_syncToSong
         movement[camera_name]['loop']       = setting_loop
 
-        # Store frames
+        # 収納フレーム
         movement[camera_name]['frames'] = []
 
         for i,frame in enumerate(paths[camera_name]):
             temp = {}
 
-            # Write the frame index to help with debugging. Camera2 ignores
-            # this field with no ill effects.
+            # デバッグに役立つように、フレームインデックスを書き込みます。
+            # Camera2はこのフィールドを無視します。
             temp['frame_index'] = i + 1
 
             temp['position'] = {}
@@ -491,11 +456,10 @@ def export_main(
     # --------------------------------------------------------------------------
 
     '''
-    Write files to disk
+    ディスクへのファイルの書き込み
 
-    Now it's time to write each camera script to the disk. The export script
-    creates a separate movement script for each camera it found in the blend
-    file.
+    各カメラスクリプトをディスクに書き込みます。エクスポートスクリプトは、
+    ブレンドファイル内で見つけた各カメラに別々のムーブメントスクリプトを作成します。
     '''
 
     path_base_noext = os.path.splitext(filepath)
@@ -503,11 +467,11 @@ def export_main(
     for camera_name in movement:
         path_target = path_base_noext[0] + '_' + camera_name + '.json'
 
-        # Open file for writing
+        # 書き込み用にファイルを開く
         with open(path_target, 'w') as fh:
             fh.write(json.dumps(movement[camera_name], indent=4, sort_keys=True))
 
-    # Track script running time
+    # スクリプトの実行時間の追跡
     now_tail = datetime.now()
 
     logger.debug('Export finished at ' + str(now_tail))
@@ -519,25 +483,25 @@ def export_main(
 def logger_start_disk():
 
     '''
-    Configure the local disk logger.
+    ローカルディスクロガーを設定します。
     '''
     try:
 
-        # Create formatter
+        # フォーマッタの作成
         formatter = logging.Formatter(
             fmt='[%(process)d] %(levelname)s: %(module)s.%(funcName)s(): %(message)s')
 
-        # If the log directory does not exist, create it
+        # ログディレクトリが存在しない場合は、作成します。
         log_path = os.path.join(os.path.dirname(bpy.data.filepath), 'logs')
         if not os.path.exists(log_path):
             os.mkdir(log_path)
 
-        # Build file path
+        # ビルドファイルパス
         fh_path = os.path.basename(bpy.data.filepath)
         fh_path += '-' + time.strftime("%Y%m%d-%H%M%S") + '.log'
         fh_path = os.path.join(log_path, fh_path)
 
-        # Point the logger to the file
+        # ロガーにファイルを指定します。
         fh = logging.FileHandler(fh_path)
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(formatter)
