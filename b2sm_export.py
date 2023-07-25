@@ -425,33 +425,53 @@ def export_main(
             movement[camera_name] = {}
 
         # オプションのグローバル設定を保存
-        movement[camera_name]['syncToSong'] = setting_syncToSong
-        movement[camera_name]['loop']       = setting_loop
+        #movement[camera_name]['syncToSong'] = setting_syncToSong
+        #movement[camera_name]['loop']       = setting_loop
+        movement[camera_name]['ActiveInPauseMenu']          = True
+        movement[camera_name]['TurnToHeadUseCameraSetting'] = False
 
         # 収納フレーム
-        movement[camera_name]['frames'] = []
+        movement[camera_name]['Movements'] = []
 
         for i,frame in enumerate(paths[camera_name]):
+            if i == 0:
+                continue
             temp = {}
 
             # デバッグに役立つように、フレームインデックスを書き込みます。
             # Camera2はこのフィールドを無視します。
-            temp['frame_index'] = i + 1
+            temp['frame_index'] = i
 
-            temp['position'] = {}
-            temp['position']['x'] = round(frame['pos'][0], 3)
-            temp['position']['y'] = round(frame['pos'][1], 3)
-            temp['position']['z'] = round(frame['pos'][2], 3)
+            pre_frame = paths[camera_name][i - 1]
+            temp['StartPos'] = {}
+            temp['StartPos']['x'] = round(pre_frame['pos'][0], 3)
+            temp['StartPos']['y'] = round(pre_frame['pos'][1], 3)
+            temp['StartPos']['z'] = round(pre_frame['pos'][2], 3)
+            temp['StartPos']['FOV'] = round(pre_frame['fov'], 3)
 
-            temp['rotation'] = {}
-            temp['rotation']['x'] = round(math.degrees(frame['rot'][0]), 3)
-            temp['rotation']['y'] = round(math.degrees(frame['rot'][1]), 3)
-            temp['rotation']['z'] = round(math.degrees(frame['rot'][2]), 3)
+            temp['StartRot'] = {}
+            temp['StartRot']['x'] = round(math.degrees(pre_frame['rot'][0]), 3)
+            temp['StartRot']['y'] = round(math.degrees(pre_frame['rot'][1]), 3)
+            temp['StartRot']['z'] = round(math.degrees(pre_frame['rot'][2]), 3)
 
-            temp['FOV'] = round(frame['fov'], 3)
-            temp['duration'] = duration
+            temp['EndPos'] = {}
+            temp['EndPos']['x'] = round(frame['pos'][0], 3)
+            temp['EndPos']['y'] = round(frame['pos'][1], 3)
+            temp['EndPos']['z'] = round(frame['pos'][2], 3)
+            temp['EndPos']['FOV'] = round(frame['fov'], 3)
 
-            movement[camera_name]['frames'].append(temp)
+            temp['EndRot'] = {}
+            temp['EndRot']['x'] = round(math.degrees(frame['rot'][0]), 3)
+            temp['EndRot']['y'] = round(math.degrees(frame['rot'][1]), 3)
+            temp['EndRot']['z'] = round(math.degrees(frame['rot'][2]), 3)
+
+            temp['TurnToHead'] = False
+            temp['TurnToHeadHorizontal'] = False
+            temp['Duration'] = duration
+            temp['Delay'] = 0
+            temp['EaseTransition'] = False
+
+            movement[camera_name]['Movements'].append(temp)
 
     # --------------------------------------------------------------------------
 
