@@ -161,19 +161,6 @@ class B2C2Export(Operator, ExportHelper):
         default=False,
     )
 
-    setting_loop: BoolProperty(
-        name="Loop Script",
-        description="チェックすると、曲がスクリプトより長い場合、移動スクリプトはループします。"  \
-            "そうでない場合、移動スクリプトは一度だけ再生され、最後のキーフレームで停止します。",
-        default=True,
-    )
-
-    setting_syncToSong: BoolProperty(
-        name="Sync to Song",
-        description="チェックを入れると、曲の一時停止時に移動スクリプトが一時停止します。",
-        default=True,
-    )
-
     def execute(self, context):
 
         # ファイルログハンドラの追加
@@ -184,9 +171,7 @@ class B2C2Export(Operator, ExportHelper):
         export_main(
                 context,
                 self.filepath,
-                self.setting_fixFovForBlenderRender,
-                self.setting_loop,
-                self.setting_syncToSong)
+                self.setting_fixFovForBlenderRender)
 
         # ログハンドラのクリーンアップ
         handlers = logger.handlers[:]
@@ -224,9 +209,7 @@ def unregister():
 def export_main(
         context,
         filepath,
-        setting_fixFovForBlenderRender,
-        setting_loop,
-        setting_syncToSong):
+        setting_fixFovForBlenderRender):
 
     # スクリプトの実行時間の追跡
     now_head = datetime.now()
@@ -425,8 +408,6 @@ def export_main(
             movement[camera_name] = {}
 
         # オプションのグローバル設定を保存
-        #movement[camera_name]['syncToSong'] = setting_syncToSong
-        #movement[camera_name]['loop']       = setting_loop
         movement[camera_name]['ActiveInPauseMenu']          = True
         movement[camera_name]['TurnToHeadUseCameraSetting'] = False
 
