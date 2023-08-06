@@ -128,5 +128,8 @@ hibitさんが開発されている[Script Mapper](https://github.com/hibit-at/S
 
 ![image](https://github.com/rynan4818/blender2ScriptMapper/assets/14249877/97ed47fd-4887-49fb-a549-2d101d702e33)
 
+# カメラパスの作り方の参考
+[Blender2Camera2のAdvanced Techniques](https://kandywrong.com/b2c2/advanced.html)に高度な制御方法など解説がありますので、参考にしてください。
 
+その他にもBlenderのカメラパスの作り方のサイトはいっぱいあるので参考にしてください。リアルなカメラ手ブレのプラグイン[Camera Shakify](https://www.google.com/search?q=Camera+Shakify)などもあります。
 
