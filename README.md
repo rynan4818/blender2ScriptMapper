@@ -37,11 +37,11 @@ hibitさんが開発されている[Script Mapper](https://github.com/hibit-at/S
 
 ![image](https://github.com/rynan4818/blender2ScriptMapper/assets/14249877/dac35311-d76f-4882-9f50-271533d0cae7)
 
-5. 追加された`NURBSパス`を選択した状態で、'G' + 'Y' キーでマウスで前方に移動して、'R' + '90' + Enterで90度回転します。
+5. 追加された`NURBSパス`を選択した状態で、'G' → 'Y' キーでマウスで前方に移動して、'R' → '90' → Enterで90度回転します。
 
 ![image](https://github.com/rynan4818/blender2ScriptMapper/assets/14249877/2af442a9-27af-4791-ba3d-65f24624763d)
 
-6. 横方向からの視点にするため、表示ツリーの'X'をクリックします。'G' + 'Z' で目線より上に上げて、'G' + 'Y' で少し後方(左)に移動、'R'で少し上方から目線まで斜めにします。
+6. 横方向からの視点にするため、表示ツリーの'X'をクリックします。'G' → 'Z' で目線より上に上げて、'G' → 'Y' で少し後方(左)に移動、'R'で少し上方から目線まで斜めにします。
 
 ![image](https://github.com/rynan4818/blender2ScriptMapper/assets/14249877/7c6a307f-79f8-402d-adef-bf1fb359a77a)
 
