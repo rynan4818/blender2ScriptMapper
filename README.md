@@ -1,9 +1,9 @@
 # Blender2ScriptMapper
-hibitさんが開発されている[Script Mapper](https://github.com/hibit-at/Scriptmapper)に、別のカメラスクリプトのカメラパスを読み込めるscriptコマンドを追加した[改造版Script Mapper](https://github.com/rynan4818/Scriptmapper)用に、Blenderで作ったカメラパスをCameraPlus用のカメラスクリプトとして出力するBlender用のスクリプトです。
+hibitさんが開発されている[Script Mapper](https://github.com/hibit-at/Scriptmapper)に、別のカメラスクリプトのカメラパスを読み込めるscriptコマンドを追加した[改造版Script Mapper](https://github.com/rynan4818/Scriptmapper)用の、Blenderで作ったカメラパスをCameraPlus用のカメラスクリプトとして出力するBlender用スクリプトです。
 
 これを使ってScriptmapperで作れないような複雑なカメラワークをBlenderで作って利用できます。
 
-元はBlenderからCamera2用のカメラスクリプトを作る[Blender2Camera2](https://github.com/KandyWrong/blender2camera2)をCameraPlusフォーマットに変更したものになります。
+KandyWrongさんが開発されているBlenderからCamera2用のカメラスクリプトを作る[Blender2Camera2](https://github.com/KandyWrong/blender2camera2)をCameraPlusフォーマットに変更したものになります。
 
 # インストール方法
 
